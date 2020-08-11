@@ -789,6 +789,8 @@ size_t xStreamBufferReceive( StreamBufferHandle_t xStreamBuffer,
 
     if( xTicksToWait != ( TickType_t ) 0 )
     {
+        BaseType_t xSavedTriggerLevel;
+		
         /* Checking if there is data and clearing the notification state must be
          * performed atomically. */
         taskENTER_CRITICAL();
@@ -808,6 +810,14 @@ size_t xStreamBufferReceive( StreamBufferHandle_t xStreamBuffer,
                 /* Should only be one reader. */
                 configASSERT( pxStreamBuffer->xTaskWaitingToReceive == NULL );
                 pxStreamBuffer->xTaskWaitingToReceive = xTaskGetCurrentTaskHandle();
+				
+                /* Temporarily reduce the trigger level if the receive buffer is
+                 * smaller than the trigger level. */
+                xSavedTriggerLevel = xStreamBuffer->xTriggerLevelBytes;
+                if( xSavedTriggerLevel > xBufferLengthBytes )
+                {
+                    xStreamBuffer->xTriggerLevelBytes = xBufferLengthBytes;
+                }
             }
             else
             {
@@ -822,6 +832,9 @@ size_t xStreamBufferReceive( StreamBufferHandle_t xStreamBuffer,
             traceBLOCKING_ON_STREAM_BUFFER_RECEIVE( xStreamBuffer );
             ( void ) xTaskNotifyWait( ( uint32_t ) 0, ( uint32_t ) 0, NULL, xTicksToWait );
             pxStreamBuffer->xTaskWaitingToReceive = NULL;
+
+            /* Restore the trigger level in case code above changed it. */
+            xStreamBuffer->xTriggerLevelBytes = xSavedTriggerLevel;
 
             /* Recheck the data available after blocking. */
             xBytesAvailable = prvBytesInBuffer( pxStreamBuffer );
