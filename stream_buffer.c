@@ -54,38 +54,44 @@
  * that uses task notifications. */
 /*lint -save -e9026 Function like macros allowed and needed here so they can be overidden. */
 #ifndef sbRECEIVE_COMPLETED
-    #define sbRECEIVE_COMPLETED( pxStreamBuffer )                         \
-    vTaskSuspendAll();                                                    \
-    {                                                                     \
-        if( ( pxStreamBuffer )->xTaskWaitingToSend != NULL )              \
-        {                                                                 \
-            ( void ) xTaskNotify( ( pxStreamBuffer )->xTaskWaitingToSend, \
-                                  ( uint32_t ) 0,                         \
-                                  eNoAction );                            \
-            ( pxStreamBuffer )->xTaskWaitingToSend = NULL;                \
-        }                                                                 \
-    }                                                                     \
+    #define sbRECEIVE_COMPLETED( pxStreamBuffer )                                                    \
+    vTaskSuspendAll();                                                                               \
+    {                                                                                                \
+        if( ( pxStreamBuffer )->xTaskWaitingToSend != NULL )                                         \
+        {                                                                                            \
+            if( xStreamBufferSpacesAvailable( StreamBuffer ) >= pxStreamBuffer->xTriggerLevelBytes ) \
+            {                                                                                        \
+                ( void ) xTaskNotify( ( pxStreamBuffer )->xTaskWaitingToSend,                        \
+                                      ( uint32_t ) 0,                                                \
+                                      eNoAction );                                                   \
+                ( pxStreamBuffer )->xTaskWaitingToSend = NULL;                                       \
+            }                                                                                        \
+        }                                                                                            \
+    }                                                                                                \
     ( void ) xTaskResumeAll();
 #endif /* sbRECEIVE_COMPLETED */
 
 #ifndef sbRECEIVE_COMPLETED_FROM_ISR
-    #define sbRECEIVE_COMPLETED_FROM_ISR( pxStreamBuffer,                            \
-                                          pxHigherPriorityTaskWoken )                \
-    {                                                                                \
-        UBaseType_t uxSavedInterruptStatus;                                          \
-                                                                                     \
-        uxSavedInterruptStatus = ( UBaseType_t ) portSET_INTERRUPT_MASK_FROM_ISR();  \
-        {                                                                            \
-            if( ( pxStreamBuffer )->xTaskWaitingToSend != NULL )                     \
-            {                                                                        \
-                ( void ) xTaskNotifyFromISR( ( pxStreamBuffer )->xTaskWaitingToSend, \
-                                             ( uint32_t ) 0,                         \
-                                             eNoAction,                              \
-                                             pxHigherPriorityTaskWoken );            \
-                ( pxStreamBuffer )->xTaskWaitingToSend = NULL;                       \
-            }                                                                        \
-        }                                                                            \
-        portCLEAR_INTERRUPT_MASK_FROM_ISR( uxSavedInterruptStatus );                 \
+    #define sbRECEIVE_COMPLETED_FROM_ISR( pxStreamBuffer,                                                \
+                                          pxHigherPriorityTaskWoken )                                    \
+    {                                                                                                    \
+        UBaseType_t uxSavedInterruptStatus;                                                              \
+                                                                                                         \
+        uxSavedInterruptStatus = ( UBaseType_t ) portSET_INTERRUPT_MASK_FROM_ISR();                      \
+        {                                                                                                \
+            if( ( pxStreamBuffer )->xTaskWaitingToSend != NULL )                                         \
+            {                                                                                            \
+                if( xStreamBufferSpacesAvailable( StreamBuffer ) >= pxStreamBuffer->xTriggerLevelBytes ) \
+                {                                                                                        \
+                    ( void ) xTaskNotifyFromISR( ( pxStreamBuffer )->xTaskWaitingToSend,                 \
+                                                 ( uint32_t ) 0,                                         \
+                                                 eNoAction,                                              \
+                                                 pxHigherPriorityTaskWoken );                            \
+                    ( pxStreamBuffer )->xTaskWaitingToSend = NULL;                                       \
+                }                                                                                        \
+            }                                                                                            \
+        }                                                                                                \
+        portCLEAR_INTERRUPT_MASK_FROM_ISR( uxSavedInterruptStatus );                                     \
     }
 #endif /* sbRECEIVE_COMPLETED_FROM_ISR */
 
