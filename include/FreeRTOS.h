@@ -342,23 +342,6 @@
     #define portSOFTWARE_BARRIER()
 #endif
 
-/* The timers module relies on xTaskGetSchedulerState(). */
-#if configUSE_TIMERS == 1
-
-    #ifndef configTIMER_TASK_PRIORITY
-        #error If configUSE_TIMERS is set to 1 then configTIMER_TASK_PRIORITY must also be defined.
-    #endif /* configTIMER_TASK_PRIORITY */
-
-    #ifndef configTIMER_QUEUE_LENGTH
-        #error If configUSE_TIMERS is set to 1 then configTIMER_QUEUE_LENGTH must also be defined.
-    #endif /* configTIMER_QUEUE_LENGTH */
-
-    #ifndef configTIMER_TASK_STACK_DEPTH
-        #error If configUSE_TIMERS is set to 1 then configTIMER_TASK_STACK_DEPTH must also be defined.
-    #endif /* configTIMER_TASK_STACK_DEPTH */
-
-#endif /* configUSE_TIMERS */
-
 #ifndef portSET_INTERRUPT_MASK_FROM_ISR
     #define portSET_INTERRUPT_MASK_FROM_ISR()    0
 #endif
@@ -872,6 +855,29 @@
 #ifndef configPOST_SLEEP_PROCESSING
     #define configPOST_SLEEP_PROCESSING( x )
 #endif
+
+/* The timers module relies on xTaskGetSchedulerState(). */
+#if configUSE_TIMERS == 1
+    #ifndef configTIMER_TASK_PRIORITY
+        #error If configUSE_TIMERS is set to 1 then configTIMER_TASK_PRIORITY must also be defined.
+    #endif /* configTIMER_TASK_PRIORITY */
+
+    #ifndef configTIMER_QUEUE_LENGTH
+        #error If configUSE_TIMERS is set to 1 then configTIMER_QUEUE_LENGTH must also be defined.
+    #endif /* configTIMER_QUEUE_LENGTH */
+
+    #ifndef configTIMER_TASK_STACK_DEPTH
+        #error If configUSE_TIMERS is set to 1 then configTIMER_TASK_STACK_DEPTH must also be defined.
+    #endif /* configTIMER_TASK_STACK_DEPTH */
+
+    #ifndef configTIMER_DEFER_START_AND_RESET_FROM_ISR
+        #if ( configUSE_TICKLESS_IDLE != 0 )
+            #define configTIMER_DEFER_START_AND_RESET_FROM_ISR    1
+        #else
+            #define configTIMER_DEFER_START_AND_RESET_FROM_ISR    0
+        #endif
+    #endif
+#endif /* configUSE_TIMERS */
 
 #ifndef configUSE_QUEUE_SETS
     #define configUSE_QUEUE_SETS    0

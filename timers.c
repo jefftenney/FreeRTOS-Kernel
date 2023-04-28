@@ -192,6 +192,14 @@
                                         const TickType_t xTimeNow ) PRIVILEGED_FUNCTION;
 
 /*
+ * Start a timer using xCommandTime as the start time.
+ */
+    static void prvStartTimer( Timer_t * const pxTimer,
+                               const TickType_t xTimeNow,
+                               const TickType_t xCommandTime ) PRIVILEGED_FUNCTION;
+
+
+/*
  * The tick count has overflowed.  Switch the timer lists after ensuring the
  * current timer list does not still reference some timers.
  */
@@ -779,6 +787,37 @@
     }
 /*-----------------------------------------------------------*/
 
+    static void prvStartTimer( Timer_t * const pxTimer,
+                               const TickType_t xTimeNow,
+                               const TickType_t xCommandTime )
+    {
+        /* Start or restart a timer. */
+        pxTimer->ucStatus |= tmrSTATUS_IS_ACTIVE;
+
+        if( prvInsertTimerInActiveList( pxTimer, xCommandTime + pxTimer->xTimerPeriodInTicks, xTimeNow, xCommandTime ) != pdFALSE )
+        {
+            /* The timer expired before it was added to the active
+             * timer list.  Process it now. */
+            if( ( pxTimer->ucStatus & tmrSTATUS_IS_AUTORELOAD ) != 0 )
+            {
+                prvReloadTimer( pxTimer, xCommandTime + pxTimer->xTimerPeriodInTicks, xTimeNow );
+            }
+            else
+            {
+                pxTimer->ucStatus &= ( ( uint8_t ) ~tmrSTATUS_IS_ACTIVE );
+            }
+
+            /* Call the timer callback. */
+            traceTIMER_EXPIRED( pxTimer );
+            pxTimer->pxCallbackFunction( ( TimerHandle_t ) pxTimer );
+        }
+        else
+        {
+            mtCOVERAGE_TEST_MARKER();
+        }
+    }
+/*-----------------------------------------------------------*/
+
     static void prvProcessReceivedCommands( void )
     {
         DaemonTaskMessage_t xMessage;
@@ -831,44 +870,31 @@
                 traceTIMER_COMMAND_RECEIVED( pxTimer, xMessage.xMessageID, xMessage.u.xTimerParameters.xMessageValue );
 
                 /* In this case the xTimerListsWereSwitched parameter is not used, but
-                 *  it must be present in the function call.  prvSampleTimeNow() must be
-                 *  called after the message is received from xTimerQueue so there is no
-                 *  possibility of a higher priority task adding a message to the message
-                 *  queue with a time that is ahead of the timer daemon task (because it
-                 *  pre-empted the timer daemon task after the xTimeNow value was set). */
+                 * it must be present in the function call.  prvSampleTimeNow() must be
+                 * called after the message is received from xTimerQueue so there is no
+                 * possibility of a higher priority task adding a message to the message
+                 * queue with a time that is ahead of the timer daemon task (because it
+                 * pre-empted the timer daemon task after the xTimeNow value was set). */
                 xTimeNow = prvSampleTimeNow( &xTimerListsWereSwitched );
 
                 switch( xMessage.xMessageID )
                 {
                     case tmrCOMMAND_START:
-                    case tmrCOMMAND_START_FROM_ISR:
                     case tmrCOMMAND_RESET:
+                        prvStartTimer( pxTimer, xTimeNow, xMessage.u.xTimerParameters.xMessageValue );
+                        break;
+
+                    case tmrCOMMAND_START_FROM_ISR:
                     case tmrCOMMAND_RESET_FROM_ISR:
-                        /* Start or restart a timer. */
-                        pxTimer->ucStatus |= tmrSTATUS_IS_ACTIVE;
-
-                        if( prvInsertTimerInActiveList( pxTimer, xMessage.u.xTimerParameters.xMessageValue + pxTimer->xTimerPeriodInTicks, xTimeNow, xMessage.u.xTimerParameters.xMessageValue ) != pdFALSE )
+                        #if ( configTIMER_DEFER_START_AND_RESET_FROM_ISR != 0 )
                         {
-                            /* The timer expired before it was added to the active
-                             * timer list.  Process it now. */
-                            if( ( pxTimer->ucStatus & tmrSTATUS_IS_AUTORELOAD ) != 0 )
-                            {
-                                prvReloadTimer( pxTimer, xMessage.u.xTimerParameters.xMessageValue + pxTimer->xTimerPeriodInTicks, xTimeNow );
-                            }
-                            else
-                            {
-                                pxTimer->ucStatus &= ( ( uint8_t ) ~tmrSTATUS_IS_ACTIVE );
-                            }
-
-                            /* Call the timer callback. */
-                            traceTIMER_EXPIRED( pxTimer );
-                            pxTimer->pxCallbackFunction( ( TimerHandle_t ) pxTimer );
+                            prvStartTimer( pxTimer, xTimeNow, xTimeNow );
                         }
-                        else
+                        #else
                         {
-                            mtCOVERAGE_TEST_MARKER();
+                            prvStartTimer( pxTimer, xTimeNow, xMessage.u.xTimerParameters.xMessageValue );
                         }
-
+                        #endif
                         break;
 
                     case tmrCOMMAND_STOP:
