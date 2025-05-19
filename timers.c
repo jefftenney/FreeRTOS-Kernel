@@ -196,6 +196,12 @@
                                         const TickType_t xTimeNow ) PRIVILEGED_FUNCTION;
 
 /*
+ * The tick count has overflowed.  Switch the timer lists after ensuring the
+ * current timer list does not still reference some timers.
+ */
+    static void prvSwitchTimerLists( void ) PRIVILEGED_FUNCTION;
+
+/*
  * Obtain the current tick count, setting *pxTimerListsWereSwitched to pdTRUE
  * if a tick count overflow occurred since prvSampleTimeNow() was last called.
  */
@@ -860,7 +866,6 @@
 
     static TickType_t prvSampleTimeNow( BaseType_t * const pxTimerListsWereSwitched )
     {
-        List_t * pxTemp;
         TickType_t xTimeNow;
         PRIVILEGED_DATA static TickType_t xLastTime = ( TickType_t ) 0U;
 
@@ -873,9 +878,7 @@
              * we process all the timers on the current list. */
             if ( listLIST_IS_EMPTY( pxCurrentTimerList ) )
             {
-                pxTemp = pxCurrentTimerList;
-                pxCurrentTimerList = pxOverflowTimerList;
-                pxOverflowTimerList = pxTemp;
+                prvSwitchTimerLists();
                 *pxTimerListsWereSwitched = pdTRUE;
             }
             else
@@ -1094,6 +1097,19 @@
                 }
             }
         }
+    }
+/*-----------------------------------------------------------*/
+
+    static void prvSwitchTimerLists( void )
+    {
+        TickType_t xNextExpireTime;
+        List_t * pxTemp;
+
+        configASSERT( listLIST_IS_EMPTY( pxCurrentTimerList ) );
+
+        pxTemp = pxCurrentTimerList;
+        pxCurrentTimerList = pxOverflowTimerList;
+        pxOverflowTimerList = pxTemp;
     }
 /*-----------------------------------------------------------*/
 
