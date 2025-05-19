@@ -873,22 +873,8 @@
 
         if( xTimeNow < xLastTime )
         {
-            /* The tick count has rolled over, so we must switch the timer lists.
-             * If the current list is not empty, delay switching the lists until
-             * we process all the timers on the current list. */
-            if ( listLIST_IS_EMPTY( pxCurrentTimerList ) )
-            {
-                prvSwitchTimerLists();
-                *pxTimerListsWereSwitched = pdTRUE;
-            }
-            else
-            {
-                /* Delay processing the tick-count rollover until we process all
-                 * the timers on the current list.  Keep "now" set to just before
-                 * rollover. */
-                xTimeNow = tmrMAX_TIME_BEFORE_OVERFLOW;
-                *pxTimerListsWereSwitched = pdFALSE;
-            }
+            prvSwitchTimerLists();
+            *pxTimerListsWereSwitched = pdTRUE;
         }
         else
         {
@@ -1105,7 +1091,19 @@
         TickType_t xNextExpireTime;
         List_t * pxTemp;
 
-        configASSERT( listLIST_IS_EMPTY( pxCurrentTimerList ) );
+        /* The tick count has overflowed.  The timer lists must be switched.
+         * If there are any timers still referenced from the current timer list
+         * then they must have expired and should be processed before the lists
+         * are switched. */
+        while( listLIST_IS_EMPTY( pxCurrentTimerList ) == pdFALSE )
+        {
+            xNextExpireTime = listGET_ITEM_VALUE_OF_HEAD_ENTRY( pxCurrentTimerList );
+
+            /* Process the expired timer.  For auto-reload timers, be careful to
+             * process only expirations that occur on the current list.  Further
+             * expirations must wait until after the lists are switched. */
+            prvProcessExpiredTimer( xNextExpireTime, tmrMAX_TIME_BEFORE_OVERFLOW );
+        }
 
         pxTemp = pxCurrentTimerList;
         pxCurrentTimerList = pxOverflowTimerList;
