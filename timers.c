@@ -204,7 +204,6 @@
 /*
  * Obtain the current tick count, setting *pxTimerListsWereSwitched to pdTRUE
  * if a tick count overflow occurred since prvSampleTimeNow() was last called.
- * Do not call this function with the scheduler suspended.
  */
     static TickType_t prvSampleTimeNow( BaseType_t * const pxTimerListsWereSwitched ) PRIVILEGED_FUNCTION;
 
@@ -782,72 +781,57 @@
         TickType_t xTimeNow;
         BaseType_t xTimerListsWereSwitched;
 
-        /* Obtain the time now to make an assessment as to whether the timer
-         * has expired or not.  If obtaining the time causes the lists to switch
-         * then don't process this timer as any timers that remained in the list
-         * when the lists were switched will have been processed within the
-         * prvSampleTimeNow() function. */
-        xTimeNow = prvSampleTimeNow( &xTimerListsWereSwitched );
-
-        if( xTimerListsWereSwitched == pdFALSE )
+        vTaskSuspendAll();
         {
-            /* The tick count has not overflowed, has the timer expired? */
-            if( ( xListWasEmpty == pdFALSE ) && ( xNextExpireTime <= xTimeNow ) )
+            /* Obtain the time now to make an assessment as to whether the timer
+             * has expired or not.  If obtaining the time causes the lists to switch
+             * then don't process this timer as any timers that remained in the list
+             * when the lists were switched will have been processed within the
+             * prvSampleTimeNow() function. */
+            xTimeNow = prvSampleTimeNow( &xTimerListsWereSwitched );
+
+            if( xTimerListsWereSwitched == pdFALSE )
             {
-                prvProcessExpiredTimer( xNextExpireTime, xTimeNow );
-            }
-            else
-            {
-                vTaskSuspendAll();
+                /* The tick count has not overflowed, has the timer expired? */
+                if( ( xListWasEmpty == pdFALSE ) && ( xNextExpireTime <= xTimeNow ) )
                 {
-                    /* If the tick count rolled over after we set xTimeNow and before
-                     * we could suspend the scheduler, resume the scheduler and return.
-                     * The next execution of prvSampleTimeNow() will handle the list
-                     * switch and the timer that just expired on the current list. */
-                    if( xTaskGetTickCount() < xTimeNow )
+                    ( void ) xTaskResumeAll();
+                    prvProcessExpiredTimer( xNextExpireTime, xTimeNow );
+                }
+                else
+                {
+                    /* The tick count has not overflowed, and the next expire
+                     * time has not been reached yet.  This task should therefore
+                     * block to wait for the next expire time or a command to be
+                     * received - whichever comes first.  The following line cannot
+                     * be reached unless xNextExpireTime > xTimeNow, except in the
+                     * case when the current timer list is empty. */
+                    if( xListWasEmpty != pdFALSE )
                     {
-                        xTaskResumeAll();
+                        /* The current timer list is empty - is the overflow list
+                         * also empty? */
+                        xListWasEmpty = listLIST_IS_EMPTY( pxOverflowTimerList );
+                    }
+
+                    vQueueWaitForMessageRestricted( xTimerQueue, ( xNextExpireTime - xTimeNow ), xListWasEmpty );
+
+                    if( xTaskResumeAll() == pdFALSE )
+                    {
+                        /* Yield to wait for either a command to arrive, or the
+                         * block time to expire.  If a command arrived between the
+                         * critical section being exited and this yield then the yield
+                         * will not cause the task to block. */
+                        taskYIELD_WITHIN_API();
                     }
                     else
                     {
-                        /* Update xTimeNow with the scheduler suspended. */
-                        xTimeNow = xTaskGetTickCount();
-
-                        /* Do we still need to wait based on the updated xTimeNow? */
-                        if( xNextExpireTime > xTimeNow || xListWasEmpty != pdFALSE )
-                        {
-                            /* The tick count has not overflowed, and the next expire
-                             * time has not been reached yet.  This task should therefore
-                             * block to wait for the next expire time or a command to be
-                             * received - whichever comes first. */
-                            if( xListWasEmpty != pdFALSE )
-                            {
-                                /* The current timer list is empty - is the overflow list
-                                 * also empty? */
-                                xListWasEmpty = listLIST_IS_EMPTY( pxOverflowTimerList );
-                            }
-
-                            vQueueWaitForMessageRestricted( xTimerQueue, ( xNextExpireTime - xTimeNow ), xListWasEmpty );
-
-                            if( xTaskResumeAll() == pdFALSE )
-                            {
-                                /* Yield to wait for either a command to arrive, or the
-                                 * block time to expire.  If a command arrived between the
-                                 * critical section being exited and this yield then the yield
-                                 * will not cause the task to block. */
-                                taskYIELD_WITHIN_API();
-                            }
-                            else
-                            {
-                                mtCOVERAGE_TEST_MARKER();
-                            }
-                        }
-                        else
-                        {
-                            xTaskResumeAll();
-                        }
+                        mtCOVERAGE_TEST_MARKER();
                     }
                 }
+            }
+            else
+            {
+                ( void ) xTaskResumeAll();
             }
         }
     }
