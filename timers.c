@@ -204,6 +204,8 @@
 /*
  * Obtain the current tick count, setting *pxTimerListsWereSwitched to pdTRUE
  * if a tick count overflow occurred since prvSampleTimeNow() was last called.
+ * If the scheduler is disabled, the tick count returned may not be current but
+ * is suitable for identifying expired timers correctly.
  */
     static TickType_t prvSampleTimeNow( BaseType_t * const pxTimerListsWereSwitched ) PRIVILEGED_FUNCTION;
 
@@ -873,8 +875,22 @@
 
         if( xTimeNow < xLastTime )
         {
-            prvSwitchTimerLists();
-            *pxTimerListsWereSwitched = pdTRUE;
+            /* The tick count has rolled over, and we must switch the timer lists.
+             * If there are expired timers waiting for processing but the scheduler
+             * is suspended, don't process the timers yet.  Delay that processing
+             * and the list switch until the scheduler is no longer suspended. */
+            if( ( listLIST_IS_EMPTY( pxCurrentTimerList ) == pdFALSE ) && ( xTaskGetSchedulerState() == taskSCHEDULER_SUSPENDED ) )
+            {
+                /* Keep "now" set to just before rollover so the expired timers
+                 * continue to appear expired. */
+                xTimeNow = tmrMAX_TIME_BEFORE_OVERFLOW;
+                *pxTimerListsWereSwitched = pdFALSE;
+            }
+            else
+            {
+                prvSwitchTimerLists();
+                *pxTimerListsWereSwitched = pdTRUE;
+            }
         }
         else
         {
