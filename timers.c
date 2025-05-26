@@ -875,10 +875,11 @@
 
         if( xTimeNow < xLastTime )
         {
-            /* If the scheduler is disabled when we identify a tick-count
-             * rollover, we resume the scheduler.  Our caller suspends the
+            /* If the scheduler is disabled when we need to switch the timer
+             * lists, resume the scheduler first.  Our caller suspends the
              * scheduler to synchronize the delay to the next timer expiration,
-             * but the next timer expiration changes when we change lists.  And
+             * but the next timer to expire changes when we change lists.  So
+             * our caller doesn't need the scheduler suspended anymore.  And
              * resuming the scheduler now ensures that any callbacks made from
              * prvSwitchTimerLists() are made with the scheduler enabled. */
             if( xTaskGetSchedulerState() == taskSCHEDULER_SUSPENDED )
