@@ -103,7 +103,6 @@ typedef void ( * portISR_t )( void );
 #define portMIN_INTERRUPT_PRIORITY            ( 255UL )
 #define portNVIC_PENDSV_PRI                   ( portMIN_INTERRUPT_PRIORITY << 16UL )
 #define portNVIC_SYSTICK_PRI                  ( portMIN_INTERRUPT_PRIORITY << 24UL )
-#define portNVIC_SVC_PRI                      ( ( ( uint32_t ) configMAX_SYSCALL_INTERRUPT_PRIORITY - 1UL ) << 24UL )
 /*-----------------------------------------------------------*/
 
 /**
@@ -2240,11 +2239,11 @@ void vPortConfigureInterruptPriorities( void ) /* PRIVILEGED_FUNCTION */
     }
     #endif /* #if ( ( configASSERT_DEFINED == 1 ) && ( portHAS_ARMV8M_MAIN_EXTENSION == 1 ) ) */
 
-    /* Make PendSV and SysTick the lowest priority interrupts, and configure
-     * SVCall for sufficient preemption priority. */
+    /* Make PendSV and SysTick the lowest priority interrupts, and make SVCall
+    * the highest priority. */
     portNVIC_SHPR3_REG |= portNVIC_PENDSV_PRI;
     portNVIC_SHPR3_REG |= portNVIC_SYSTICK_PRI;
-    portNVIC_SHPR2_REG = portNVIC_SVC_PRI;
+    portNVIC_SHPR2_REG = 0;
 }
 /*-----------------------------------------------------------*/
 
