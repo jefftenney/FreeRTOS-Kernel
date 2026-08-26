@@ -2283,8 +2283,8 @@ void vPortConfigureInterruptPriorities( void ) /* PRIVILEGED_FUNCTION */
     }
     #endif /* #if ( ( configASSERT_DEFINED == 1 ) && ( portHAS_ARMV8M_MAIN_EXTENSION == 1 ) ) */
 
-    /* Make PendSV and SysTick the lowest priority interrupts, and make SVCall
-    * the highest priority. */
+    /* Make PendSV and SysTick the lowest priority interrupts, and configure
+     * SVCall for sufficient preemption priority. */
     portNVIC_SHPR3_REG |= portNVIC_PENDSV_PRI;
     portNVIC_SHPR3_REG |= portNVIC_SYSTICK_PRI;
     portNVIC_SHPR2_REG = portNVIC_SVC_PRI;
