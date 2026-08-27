@@ -103,7 +103,8 @@ typedef void ( * portISR_t )( void );
 #define portMIN_INTERRUPT_PRIORITY            ( 255UL )
 #define portNVIC_PENDSV_PRI                   ( portMIN_INTERRUPT_PRIORITY << 16UL )
 #define portNVIC_SYSTICK_PRI                  ( portMIN_INTERRUPT_PRIORITY << 24UL )
-#define portNVIC_SVC_PRI                      ( ( ( uint32_t ) configMAX_SYSCALL_INTERRUPT_PRIORITY - 1UL ) << 24UL )
+#define portNVIC_SVC_PRI                      ( ( ( uint32_t ) configMAX_SYSCALL_INTERRUPT_PRIORITY << 24UL ) )
+#define portNVIC_SVC_PRI_TO_START_FIRST_TASK  ( ( ( uint32_t ) configMAX_SYSCALL_INTERRUPT_PRIORITY - 1UL ) << 24UL )
 /*-----------------------------------------------------------*/
 
 /**
@@ -1225,6 +1226,12 @@ void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) /* PRIVILEGED_FUNCTIO
                 }
                 #endif /* configENABLE_FPU */
 
+                /* Reduce the priority of SVC to its permanent setting. The new
+                 * setting takes effect with the next invocation of SVC, not the
+                 * one currently underway. The temporary, high priority is used
+                 * only to start the first task. */
+                portNVIC_SHPR2_REG = portNVIC_SVC_PRI;
+
                 /* Setup the context of the first task so that the first task starts
                  * executing. */
                 vRestoreContextOfFirstTask();
@@ -2284,10 +2291,11 @@ void vPortConfigureInterruptPriorities( void ) /* PRIVILEGED_FUNCTION */
     #endif /* #if ( ( configASSERT_DEFINED == 1 ) && ( portHAS_ARMV8M_MAIN_EXTENSION == 1 ) ) */
 
     /* Make PendSV and SysTick the lowest priority interrupts, and configure
-     * SVCall for sufficient preemption priority. */
+     * SVCall temporarily for sufficient priority to preempt the critical
+     * section from which we start the first task. */
     portNVIC_SHPR3_REG |= portNVIC_PENDSV_PRI;
     portNVIC_SHPR3_REG |= portNVIC_SYSTICK_PRI;
-    portNVIC_SHPR2_REG = portNVIC_SVC_PRI;
+    portNVIC_SHPR2_REG = portNVIC_SVC_PRI_TO_START_FIRST_TASK;
 }
 /*-----------------------------------------------------------*/
 
